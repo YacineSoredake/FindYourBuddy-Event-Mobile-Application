@@ -1,6 +1,9 @@
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
 import 'package:frontend/core/constants.dart';
 import 'package:frontend/providers/auth_provider.dart';
+import 'package:frontend/providers/profile_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:palette_generator/palette_generator.dart';
 
@@ -22,7 +25,11 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   bool get isMyProfile => widget.currentUserId == widget.viewedUserId;
-  Map<String, dynamic>? viewedUser;
+
+  Map<String, dynamic>? userData;
+  Map<String, dynamic>? stats;
+  List<dynamic>? likedEvents;
+
   bool loading = true;
   Color? dominantColor;
 
@@ -34,17 +41,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _loadProfile() async {
     final auth = Provider.of<AuthProvider>(context, listen: false);
+    final profile = Provider.of<ProfileProvider>(context, listen: false);
 
-    if (isMyProfile) {
-      viewedUser = auth.user?.toJson();
-    } else {
-      final buddy = await auth.fetchUserById(widget.viewedUserId);
-      viewedUser = buddy?.toJson();
-    }
+    try {
+      final result = await profile.fetchUserById(widget.viewedUserId);
 
-    // Extract color from avatar
-    if (viewedUser != null && viewedUser!['avatar'] != null) {
-      await _extractAvatarColor(viewedUser!['avatar']);
+      if (result != null) {
+        userData = result['user'];
+        stats = result['stats'];
+        likedEvents = result['likedEvents'];
+      }
+ 
+      if (userData != null && userData!['avatar'] != null) {
+        await _extractAvatarColor(userData!['avatar']);
+      }
+    } catch (e) {
+      debugPrint('Profile load error: $e');
     }
 
     setState(() => loading = false);
@@ -52,76 +64,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _extractAvatarColor(String imageUrl) async {
     try {
-      final PaletteGenerator paletteGenerator =
-          await PaletteGenerator.fromImageProvider(
+      final PaletteGenerator palette = await PaletteGenerator.fromImageProvider(
         NetworkImage(imageUrl),
         size: const Size(200, 200),
         maximumColorCount: 20,
       );
-
-      setState(() {
-        dominantColor = paletteGenerator.dominantColor?.color ??
-            paletteGenerator.vibrantColor?.color ??
-            paletteGenerator.mutedColor?.color ??
-            AppColors.primary;
-      });
-    } catch (e) {
-      setState(() {
-        dominantColor = AppColors.primary;
-      });
+      dominantColor =
+          palette.dominantColor?.color ??
+          palette.vibrantColor?.color ??
+          palette.mutedColor?.color ??
+          AppColors.primary;
+    } catch (_) {
+      dominantColor = AppColors.primary;
     }
   }
 
   @override
   Widget build(BuildContext context) {
     if (loading) {
-      return Scaffold(
-        backgroundColor: Colors.white,
-        body: Center(
-          child: CircularProgressIndicator(
-            color: Colors.black,
-            strokeWidth: 2,
-          ),
-        ),
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator(color: Colors.black)),
       );
     }
 
-    if (viewedUser == null) {
+    if (userData == null) {
       return Scaffold(
-        backgroundColor: Colors.white,
         appBar: AppBar(
           backgroundColor: Colors.white,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: Colors.black),
-            onPressed: () => Navigator.pop(context),
+          title: const Text(
+            "User not found",
+            style: TextStyle(color: Colors.black),
           ),
+          iconTheme: const IconThemeData(color: Colors.black),
         ),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.person_off_outlined, size: 80, color: Colors.grey[400]),
-              const SizedBox(height: 16),
-              Text(
-                'User not found',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey[600],
-                ),
-              ),
-            ],
-          ),
-        ),
+        body: const Center(child: Text("This user does not exist.")),
       );
     }
 
-    final avatar = viewedUser!['avatar'];
-    final name = viewedUser!['name'] ?? 'Unknown User';
-    final bio = viewedUser!['bio'];
-    final fields = viewedUser!['fields'] as List<String>?;
+    final avatar = userData!['avatar'];
+    final name = userData!['name'] ?? "Unknown";
+    final fields = (userData!['fields'] as List?) ?? [];
     final bgColor = dominantColor ?? AppColors.primary;
+
+    final postsCount = stats?['eventsPosted'] ?? 0;
+    final buddiesCount = stats?['matchedBuddies'] ?? 0;
+    final likedCount = stats?['likedEventsCount'] ?? 0;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -129,382 +116,248 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ? AppBar(
               backgroundColor: Colors.white,
               elevation: 0,
-              leading: IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.black),
-                onPressed: () => Navigator.pop(context),
-              ),
-              title: Text(
-                name,
-                style: const TextStyle(
-                  color: Colors.black,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              actions: [
-                if (isMyProfile)
-                  IconButton(
-                    icon: const Icon(Icons.menu, color: Colors.black),
-                    onPressed: () {
-                      // TODO: Show menu
-                    },
-                  ),
-              ],
+              centerTitle: true,
+              title: Text(name, style: const TextStyle(color: Colors.black)),
+              iconTheme: const IconThemeData(color: Colors.black),
             )
           : null,
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Profile Header Section
+            // 🔹 Header Section
             Padding(
               padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 45,
+                    backgroundImage: avatar != null
+                        ? NetworkImage(avatar)
+                        : null,
+                    backgroundColor: bgColor.withOpacity(0.2),
+                    child: avatar == null
+                        ? Text(
+                            name[0].toUpperCase(),
+                            style: const TextStyle(
+                              fontSize: 30,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          )
+                        : null,
+                  ),
+                  const SizedBox(width: 20),
+                  Expanded(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _statTile(postsCount.toString(), "Posts"),
+                        _statTile(buddiesCount.toString(), "Matches"),
+                        _statTile(likedCount.toString(), "Likes"),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // 🔹 Name + Interests
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Avatar and Stats Row
-                  Row(
-                    children: [
-                      // Avatar
-                      Container(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: avatar == null
-                              ? LinearGradient(
-                                  colors: [
-                                    bgColor,
-                                    bgColor.withOpacity(0.7),
-                                  ],
-                                )
-                              : null,
-                        ),
-                        child: CircleAvatar(
-                          radius: 40,
-                          backgroundColor: Colors.grey[300],
-                          backgroundImage: avatar != null
-                              ? NetworkImage(avatar)
-                              : null,
-                          child: avatar == null
-                              ? Text(
-                                  name[0].toUpperCase(),
-                                  style: const TextStyle(
-                                    fontSize: 32,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : null,
-                        ),
-                      ),
-                      const SizedBox(width: 30),
-                      // Stats
-                      Expanded(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
-                          children: [
-                            _buildStatColumn('0', 'Posts'),
-                            _buildStatColumn('0', 'Followers'),
-                            _buildStatColumn('0', 'Following'),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  // Name
                   Text(
                     name,
                     style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                  // Bio
-                  if (bio != null && bio.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      bio,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: Colors.black,
-                      ),
-                    ),
-                  ],
-                  // Fields/Interests
-                  if (fields != null && fields.isNotEmpty) ...[
-                    const SizedBox(height: 8),
+                  const SizedBox(height: 8),
+                  if (fields.isNotEmpty)
                     Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
+                      spacing: 8,
+                      runSpacing: 8,
                       children: fields
-                          .map((field) => Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: bgColor.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(
-                                    color: bgColor.withOpacity(0.3),
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Text(
-                                  field,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: bgColor,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ))
+                          .map(
+                            (f) => Chip(
+                              label: Text(f),
+                              backgroundColor: bgColor.withOpacity(0.15),
+                              labelStyle: TextStyle(color: bgColor),
+                            ),
+                          )
                           .toList(),
                     ),
-                  ],
-                  const SizedBox(height: 16),
-                  // Action Buttons
-                  if (isMyProfile)
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _instagramButton(
-                            label: 'Edit Profile',
-                            onPressed: () {
-                              // TODO: Edit profile
-                            },
-                            isPrimary: false,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: _instagramButton(
-                            label: 'Share Profile',
-                            onPressed: () {
-                              // TODO: Share profile
-                            },
-                            isPrimary: false,
-                          ),
-                        ),
-                      ],
-                    )
-                  else
-                    Row(
-                      children: [
-                        Expanded(
-                          flex: 5,
-                          child: _instagramButton(
-                            label: 'Follow',
-                            onPressed: () {
-                              // TODO: Follow user
-                            },
-                            isPrimary: true,
-                            color: bgColor,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          flex: 5,
-                          child: _instagramButton(
-                            label: 'Message',
-                            onPressed: () {
-                              Navigator.pushNamed(
-                                context,
-                                '/chat',
-                                arguments: {
-                                  'userId': widget.currentUserId,
-                                  'buddyId': widget.viewedUserId,
-                                  'buddyName': name,
-                                  'buddyAvatar': avatar,
-                                },
-                              );
-                            },
-                            isPrimary: false,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        _iconButton(
-                          icon: Icons.person_add_outlined,
-                          onPressed: () {
-                            // TODO: More actions
-                          },
-                        ),
-                      ],
-                    ),
                 ],
               ),
             ),
-            // Divider
-            const Divider(height: 1, thickness: 0.5),
-            // Tabs
-            Container(
-              height: 50,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _tabButton(
-                      icon: Icons.grid_on_outlined,
-                      isSelected: true,
-                    ),
-                  ),
-                  Expanded(
-                    child: _tabButton(
-                      icon: Icons.person_pin_outlined,
-                      isSelected: false,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1, thickness: 0.5),
-            // Grid of posts (empty state)
-            Container(
-              padding: const EdgeInsets.all(40),
-              child: Center(
+            const SizedBox(height: 16),
+
+            // 🔹 Action Buttons
+            if (isMyProfile)
+              _buttonRow([
+                _profileButton("Edit Profile", () {
+                  // TODO: Navigate to edit page
+                }),
+                _profileButton("Share Profile", () {}),
+              ])
+            else
+              _buttonRow([
+                _profileButton("Follow", () {}),
+                _profileButton("Message", () {
+                  Navigator.pushNamed(
+                    context,
+                    '/chat',
+                    arguments: {
+                      'userId': widget.currentUserId,
+                      'buddyId': widget.viewedUserId,
+                      'buddyName': name,
+                      'buddyAvatar': avatar,
+                    },
+                  );
+                }),
+              ]),
+
+            const Divider(height: 30),
+
+            // 🔹 Liked Events
+            if (likedEvents != null && likedEvents!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.black, width: 2),
-                      ),
-                      child: const Icon(
-                        Icons.camera_alt_outlined,
-                        size: 60,
-                        color: Colors.black,
+                    const Text(
+                      "Liked Events",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(height: 24),
-                    Text(
-                      isMyProfile ? 'Share Photos' : 'No Posts Yet',
-                      style: const TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w300,
-                        color: Colors.black,
-                      ),
+                    const SizedBox(height: 10),
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            mainAxisSpacing: 10,
+                            crossAxisSpacing: 10,
+                            childAspectRatio: 1,
+                          ),
+                      itemCount: likedEvents!.length,
+                      itemBuilder: (context, i) {
+                        final e = likedEvents![i];
+                        final image = e['images']?.isNotEmpty == true
+                            ? e['images'][0]
+                            : null;
+                        return Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            image: image != null
+                                ? DecorationImage(
+                                    image: NetworkImage(image),
+                                    fit: BoxFit.cover,
+                                  )
+                                : null,
+                            color: Colors.grey[200],
+                          ),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.black.withOpacity(0.4),
+                                  Colors.transparent,
+                                ],
+                                begin: Alignment.bottomCenter,
+                                end: Alignment.topCenter,
+                              ),
+                            ),
+                            padding: const EdgeInsets.all(8),
+                            alignment: Alignment.bottomLeft,
+                            child: Text(
+                              e['title'] ?? "",
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     ),
-                    if (isMyProfile) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        'When you share photos, they\'ll appear on your profile.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                    ],
                   ],
                 ),
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.all(32.0),
+                child: Center(
+                  child: Text(
+                    isMyProfile
+                        ? "You haven't liked any events yet."
+                        : "No liked events to show.",
+                    style: const TextStyle(color: Colors.grey),
+                  ),
+                ),
               ),
-            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildStatColumn(String count, String label) {
-    return Column(
-      children: [
-        Text(
-          count,
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: Colors.black,
-          ),
+  Widget _statTile(String count, String label) => Column(
+    children: [
+      Text(
+        count,
+        style: const TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+          color: Colors.black,
         ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 13,
-            color: Colors.black,
-          ),
-        ),
-      ],
-    );
-  }
+      ),
+      const SizedBox(height: 4),
+      Text(label, style: const TextStyle(fontSize: 13, color: Colors.grey)),
+    ],
+  );
 
-  Widget _instagramButton({
-    required String label,
-    required VoidCallback onPressed,
-    required bool isPrimary,
-    Color? color,
-  }) {
-    return SizedBox(
-      height: 32,
-      child: ElevatedButton(
-        onPressed: onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: isPrimary ? (color ?? Colors.blue) : Colors.white,
-          foregroundColor: isPrimary ? Colors.white : Colors.black,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-            side: isPrimary
-                ? BorderSide.none
-                : BorderSide(color: Colors.grey[300]!, width: 1),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-    );
-  }
+  Widget _buttonRow(List<Widget> buttons) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+    child: Row(
+      children:
+          buttons
+              .expand((b) => [Expanded(child: b), const SizedBox(width: 8)])
+              .toList()
+            ..removeLast(),
+    ),
+  );
 
-  Widget _iconButton({
-    required IconData icon,
-    required VoidCallback onPressed,
-  }) {
-    return SizedBox(
-      height: 32,
-      width: 32,
-      child: ElevatedButton(
-        onPressed: onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-            side: BorderSide(color: Colors.grey[300]!, width: 1),
-          ),
-          padding: EdgeInsets.zero,
-        ),
-        child: Icon(icon, size: 18),
-      ),
-    );
-  }
-
-  Widget _tabButton({
-    required IconData icon,
-    required bool isSelected,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-            color: isSelected ? Colors.black : Colors.transparent,
-            width: 1,
-          ),
+  Widget _profileButton(String label, VoidCallback onPressed) => SizedBox(
+    height: 36,
+    child: ElevatedButton(
+      onPressed: onPressed,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: const BorderSide(color: Colors.grey),
         ),
       ),
-      child: Icon(
-        icon,
-        color: isSelected ? Colors.black : Colors.grey[400],
-        size: 24,
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Colors.black,
+          fontWeight: FontWeight.w500,
+        ),
       ),
-    );
-  }
+    ),
+  );
 }

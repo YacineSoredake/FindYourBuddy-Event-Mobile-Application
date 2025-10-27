@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:frontend/providers/swipe_provider.dart';
-import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
 import 'package:swipable_stack/swipable_stack.dart';
 import '../../providers/event_provider.dart';
 import '../../models/user.dart';
 import '../../core/constants.dart';
+import 'package:lottie/lottie.dart';
 
 class BuddiesSwipeScreen extends StatefulWidget {
   const BuddiesSwipeScreen({super.key});
@@ -132,20 +132,20 @@ class _BuddiesSwipeScreenState extends State<BuddiesSwipeScreen> {
       const Center(child: CircularProgressIndicator(color: AppColors.primary));
 
   Widget _buildEmptyState() => Padding(
-    padding: const EdgeInsets.only(top: 200),
+    padding: const EdgeInsets.only(top: 150),
     child: Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        const Icon(
-          Icons.people_outline_rounded,
-          size: 80,
-          color: Color.fromARGB(179, 255, 0, 0),
+        Lottie.asset(
+          'assets/animations/laughCat.json',
+          width: 180,
+          repeat: true,
+          fit: BoxFit.contain,
         ),
-        const SizedBox(height: 16),
         const Text(
-          "No buddies found 😢",
+          "Sad Day For You",
           style: TextStyle(
-            color: Color.fromARGB(255, 66, 201, 255),
+            color: AppColors.secondary,
             fontSize: 18,
           ),
         ),
@@ -153,14 +153,14 @@ class _BuddiesSwipeScreenState extends State<BuddiesSwipeScreen> {
         ElevatedButton(
           onPressed: _fetchBuddies,
           style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.accent,
+            backgroundColor: const Color.fromARGB(255, 255, 85, 0),
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(15),
             ),
           ),
-          child: const Text("Refresh"),
+          child: const Text("Refresh Maybe ?"),
         ),
       ],
     ),

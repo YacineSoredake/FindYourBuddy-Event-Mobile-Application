@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 class ApiConstants {
-  static const String baseUrl = "https://9306cfd8f075.ngrok-free.app/v1";
-  static const String socketUrl = "https://9306cfd8f075.ngrok-free.app";
+  static const String baseUrl = "https://933702ba4129.ngrok-free.app/v1";
+  static const String socketUrl = "https://933702ba4129.ngrok-free.app";
 }
 
 class AppColors {

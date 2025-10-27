@@ -1,4 +1,3 @@
-import 'dart:developer';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -92,20 +91,6 @@ class AuthService {
       final errorMsg = e.response?.data?["message"] ?? "Unknown profile error";
       throw LoginException(errorMsg);
     }
-  }
-
-  static Future<User?> fetchUserById(String userId) async {
-    try {
-      final res = await Api.dio.get("/$userId");
-      if (res.statusCode == 200) {
-        return User.fromJson(res.data['user']);
-      } else {
-        log("Failed to fetch user: ${res.data.toString()}");
-      }
-    } catch (e) {
-      log("Error fetching user: $e");
-    }
-    throw Exception("User not found");
   }
 
   static Future<void> logout() async {

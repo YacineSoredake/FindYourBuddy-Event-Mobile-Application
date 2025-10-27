@@ -4,6 +4,7 @@ import 'package:frontend/core/constants.dart';
 import 'package:frontend/firebase_options.dart';
 import 'package:frontend/providers/chat_provider.dart';
 import 'package:frontend/providers/event_provider.dart';
+import 'package:frontend/providers/profile_provider.dart';
 import 'package:frontend/providers/swipe_provider.dart';
 import 'package:frontend/screens/chat/chat_screen.dart';
 import 'package:frontend/screens/event/add_event_screen.dart';
@@ -26,6 +27,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => EventProvider()),
         ChangeNotifierProvider(create: (_) => SwipeProvider()),
+        ChangeNotifierProvider(create: (_) => ProfileProvider()),
       ],
       child: const MyApp(),
     ),

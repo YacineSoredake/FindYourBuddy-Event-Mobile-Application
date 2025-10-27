@@ -99,7 +99,7 @@ class AuthProvider extends ChangeNotifier {
         _verificationDone = true;
         _verificationTimer?.cancel();
         if (context != null) nextStep();
-      } 
+      }
     });
   }
 
@@ -142,7 +142,7 @@ class AuthProvider extends ChangeNotifier {
     clearError();
     await loadUser();
     final route = _user != null ? '/main' : '/login';
-    clearError(); 
+    clearError();
     Navigator.pushReplacementNamed(context, route);
   }
 
@@ -152,15 +152,6 @@ class AuthProvider extends ChangeNotifier {
       final token = await Storage.getAccessToken();
       if (token != null) _user = await AuthService.currentUser();
     });
-  }
-
-  Future<User?> fetchUserById(String userId) async {
-    clearError();
-    User? fetchedUser;
-    await _runSafe(() async {
-      fetchedUser = await AuthService.fetchUserById(userId);
-    });
-    return fetchedUser;
   }
 
   Future<void> login(String email, String password) async {
